@@ -13,7 +13,7 @@ import requests
 # 1. Google Sheets Setup
 creds_dict = json.loads(os.environ["GOOGLE_CREDS"])
 client = gspread.service_account_from_dict(creds_dict)
-sheet = client.open("GANN INTRA Final").futures_data
+sheet = client.open("Gann_levels_final").futures_data
 
 # 2. Date & Weekend Check (Explicit IST)
 IST = ZoneInfo("Asia/Kolkata")
