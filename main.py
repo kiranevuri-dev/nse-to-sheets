@@ -42,6 +42,46 @@ COLS = [
     "TtlTradgVol",
 ]
 
+# Readable headers for Row 1 (replace with COLS if you prefer raw UDiFF names)
+SHEET_HEADERS = [
+    "Trade Date",
+    "Symbol",
+    "Expiry Date",
+    "Open",
+    "High",
+    "Low",
+    "Close",
+    "Settlement Price",
+    "Open Interest",
+    "Volume",
+]
+
+
+def ensure_headers(worksheet: gspread.Worksheet) -> list[list[str]]:
+    """Ensures Row 1 contains headers without overwriting existing data rows."""
+    rows = worksheet.get_all_values()
+
+    if not rows or not any(rows[0]):
+        worksheet.update(range_name="A1:J1", values=[SHEET_HEADERS])
+        worksheet.format("A1:J1", {"textFormat": {"bold": True}})
+        worksheet.freeze(rows=1)
+        return [SHEET_HEADERS]
+
+    if rows[0] != SHEET_HEADERS:
+        # If Row 1 already holds a YYYY-MM-DD data entry, insert headers above it
+        first_cell = rows[0][0].strip()
+        if len(first_cell) == 10 and first_cell[4] == "-" and first_cell[7] == "-":
+            worksheet.insert_row(SHEET_HEADERS, index=1)
+            rows.insert(0, SHEET_HEADERS)
+        else:
+            worksheet.update(range_name="A1:J1", values=[SHEET_HEADERS])
+            rows[0] = SHEET_HEADERS
+
+        worksheet.format("A1:J1", {"textFormat": {"bold": True}})
+        worksheet.freeze(rows=1)
+
+    return rows
+
 
 def parse_udiff_futures(raw_bytes: bytes, symbols: list[str]) -> pd.DataFrame:
     """Reads either a zipped or plain UDiFF CSV and extracts front-month IDF rows."""
@@ -53,7 +93,6 @@ def parse_udiff_futures(raw_bytes: bytes, symbols: list[str]) -> pd.DataFrame:
     else:
         df = pd.read_csv(io.BytesIO(raw_bytes))
 
-    # Strip any extra whitespace in headers or string identifiers
     df.columns = df.columns.str.strip()
     df["FinInstrmTp"] = df["FinInstrmTp"].astype(str).str.strip()
     df["TckrSymb"] = df["TckrSymb"].astype(str).str.strip()
@@ -109,6 +148,9 @@ def fetch_bse_futures(date_str: str) -> pd.DataFrame:
 
 
 try:
+    # Ensure headers exist first so deduplication checks Row 2 onward accurately
+    existing_rows = ensure_headers(sheet)
+
     frames = []
     for label, fetcher in [("NSE", fetch_nse_futures), ("BSE", fetch_bse_futures)]:
         try:
@@ -124,8 +166,6 @@ try:
 
     combined_df = pd.concat(frames, ignore_index=True)
 
-    # Deduplicate against existing (TradDt, TckrSymb) entries in Google Sheets
-    existing_rows = sheet.get_all_values()
     existing_keys = {(row[0], row[1]) for row in existing_rows[1:] if len(row) >= 2}
 
     rows_to_add = [
