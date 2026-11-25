@@ -13,7 +13,15 @@ import requests
 # 1. Google Sheets Setup
 creds_dict = json.loads(os.environ["GOOGLE_CREDS"])
 client = gspread.service_account_from_dict(creds_dict)
-sheet = client.open("Gann_levels_final").futures_data
+# sheet = client.open("Gann_levels_final").futures_data
+
+# With this:
+try:
+    sheet = client.open("Gann_levels_final").worksheet("futures_data")
+except gspread.exceptions.SpreadsheetNotFound:
+    raise RuntimeError(
+        f"Sheet 'Gann_levels_final' not visible to service account: {creds_dict.get('client_email')}"
+    )
 
 # 2. Date & Weekend Check (Explicit IST)
 IST = ZoneInfo("Asia/Kolkata")
